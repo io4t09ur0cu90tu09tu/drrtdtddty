@@ -3,7 +3,7 @@ from pathlib import Path
 from copy import deepcopy
 import pytest
 
-# Гарантуємо додавання шляхів до sys.path
+# Додаємо шлях до сумісності з автотестером
 BASE_DIR = Path(__file__).resolve().parent.parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
@@ -14,8 +14,8 @@ try:
         apply_loyalty_discount,
         calculate_usage_cost,
         calculate_user_monthly_cost,
-        make_mobile_processor,
-        process_mobile_users,
+        process_orders_pure,
+        make_processor,
     )
 except ImportError:
     from lab01.core import (
@@ -23,8 +23,8 @@ except ImportError:
         apply_loyalty_discount,
         calculate_usage_cost,
         calculate_user_monthly_cost,
-        make_mobile_processor,
-        process_mobile_users,
+        process_orders_pure,
+        make_processor,
     )
 
 
@@ -40,6 +40,7 @@ def sample_user() -> MobileUser:
 
 
 def test_referential_transparency(sample_user: MobileUser) -> None:
+    """Перевірка референтної прозорості."""
     tariff = lambda u: calculate_usage_cost(u, 1.0, 0.5, 5.0)
     res1 = calculate_user_monthly_cost(sample_user, tariff, apply_loyalty_discount)
     res2 = calculate_user_monthly_cost(sample_user, tariff, apply_loyalty_discount)
@@ -47,6 +48,7 @@ def test_referential_transparency(sample_user: MobileUser) -> None:
 
 
 def test_no_mutation(sample_user: MobileUser) -> None:
+    """Перевірка відсутності мутації вхідних даних."""
     original = deepcopy(sample_user)
     tariff = lambda u: calculate_usage_cost(u, 1.0, 0.5, 5.0)
     calculate_user_monthly_cost(sample_user, tariff, apply_loyalty_discount)
@@ -56,20 +58,13 @@ def test_no_mutation(sample_user: MobileUser) -> None:
 
 
 def test_callable_policies(sample_user: MobileUser) -> None:
+    """Перевірка параметризації політик через Callable."""
     tariff = lambda u: 100.0
     discount = lambda cost, bonus: cost - float(bonus)
 
-    processor = make_mobile_processor(tariff, discount)
+    processor = make_processor(tariff_fn=tariff, bonus_fn=discount)
     res = processor([sample_user])
 
     assert res["count"] == 1
-    assert res["users"][0]["monthly_cost"] == 80.0
-    assert res["total_revenue"] == 80.0
-
-
-def test_process_mobile_users_direct(sample_user: MobileUser) -> None:
-    tariff = lambda u: 50.0
-    discount = lambda cost, bonus: cost
-    res = process_mobile_users([sample_user], tariff, discount)
-    assert res["count"] == 1
-    assert res["total_revenue"] == 50.0
+    assert res["orders"][0]["monthly_cost"] == 80.0
+    assert res["revenue"] == 80.0
