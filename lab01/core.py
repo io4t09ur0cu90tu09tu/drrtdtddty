@@ -1,9 +1,11 @@
 from typing import Any, Callable, Dict, Iterable, List, TypedDict, Union
 
+
 class Usage(TypedDict, total=False):
     minutes: Union[int, float]
     sms: Union[int, float]
     data_gb: Union[int, float]
+
 
 class MobileUser(TypedDict, total=False):
     id: int
@@ -14,8 +16,10 @@ class MobileUser(TypedDict, total=False):
     monthly_cost: float
     total: float
 
+
 TariffRuleFn = Callable[[Usage], float]
 BonusRuleFn = Callable[[float, int], float]
+
 
 def calculate_usage_cost(
     usage: Usage,
@@ -23,14 +27,21 @@ def calculate_usage_cost(
     sms_rate: float = 0.3,
     data_rate_per_gb: float = 10.0,
 ) -> float:
+    """Обчислює вартість використаних послуг."""
     if not usage:
         return 0.0
     minutes = max(0.0, float(usage.get("minutes", 0.0)))
     sms = max(0.0, float(usage.get("sms", 0)))
     data_gb = max(0.0, float(usage.get("data_gb", 0.0)))
-    return round(minutes * minute_rate + sms * sms_rate + data_gb * data_rate_per_gb, 2)
+    return round(
+        minutes * minute_rate + sms * sms_rate + data_gb * data_rate_per_gb, 2
+    )
 
-def apply_loyalty_discount(cost: float, bonus_points: Union[int, float]) -> float:
+
+def apply_loyalty_discount(
+    cost: float, bonus_points: Union[int, float]
+) -> float:
+    """Застосовує знижку за накопичені бонуси."""
     if cost <= 0:
         return 0.0
     safe_bonus = max(0, int(bonus_points))
@@ -38,9 +49,11 @@ def apply_loyalty_discount(cost: float, bonus_points: Union[int, float]) -> floa
     discount = min(float(safe_bonus) * 0.5, max_discount)
     return round(max(0.0, cost - discount), 2)
 
+
 def calculate_user_monthly_cost(
     user: MobileUser, tariff_fn: TariffRuleFn, bonus_fn: BonusRuleFn
 ) -> MobileUser:
+    """Обчислює суму до сплати та повертає новий словник без мутації вхідного."""
     usage = user.get("usage", {})
     bonus_points = int(user.get("bonus_points", 0))
 
@@ -52,30 +65,16 @@ def calculate_user_monthly_cost(
     new_user["total"] = round(float(final_cost), 2)
     return new_user
 
+
 def process_mobile_users(
     users: Iterable[MobileUser],
     tariff_fn: TariffRuleFn,
     bonus_fn: BonusRuleFn,
 ) -> Dict[str, Any]:
+    """Чиста функція обробки списку акаунтів."""
     processed_users: List[MobileUser] = [
         calculate_user_monthly_cost(u, tariff_fn, bonus_fn) for u in users
     ]
-    total_revenue = sum(float(u.get("monthly_cost", 0.0)) for u in processed_users)
-    return {
-        "count": len(processed_users),
-        "revenue": round(total_revenue, 2),
-        "total_revenue": round(total_revenue, 2),
-        "users": processed_users,
-        "orders": processed_users,
-    }
-
-def make_mobile_processor(
-    tariff_fn: TariffRuleFn, bonus_fn: BonusRuleFn
-) -> Callable[[Iterable[MobileUser]], Dict[str, Any]]:
-    def process(users: Iterable[MobileUser]) -> Dict[str, Any]:
-        return process_mobile_users(users, tariff_fn, bonus_fn)
-
-    return process    ]
     total_revenue = sum(
         float(u.get("monthly_cost", 0.0)) for u in processed_users
     )
@@ -87,28 +86,11 @@ def make_mobile_processor(
         "orders": processed_users,
     }
 
-def make_mobile_processor(
-    tariff_fn: TariffRuleFn, bonus_fn: BonusRuleFn
-) -> Callable[[Iterable[MobileUser]], Dict[str, Any]]:
-    """Фабрика функцій вищого порядку."""
-    def process(users: Iterable[MobileUser]) -> Dict[str, Any]:
-        return process_mobile_users(users, tariff_fn, bonus_fn)
-
-    return process    *,
-    tariff_fn: TariffRuleFn = None,
-    bonus_fn: BonusRuleFn = None,
-    **kwargs: Any
-) -> Dict[str, Any]:
-    """Аліас для сумісності з загальним шаблоном процесора."""
-    if tariff_fn is None:
-        tariff_fn = lambda u: calculate_usage_cost(u)
-    if bonus_fn is None:
-        bonus_fn = apply_loyalty_discount
-    return process_mobile_users(orders, tariff_fn, bonus_fn)
 
 def make_mobile_processor(
     tariff_fn: TariffRuleFn, bonus_fn: BonusRuleFn
 ) -> Callable[[Iterable[MobileUser]], Dict[str, Any]]:
+    """Фабрика вищого порядку."""
     def process(users: Iterable[MobileUser]) -> Dict[str, Any]:
         return process_mobile_users(users, tariff_fn, bonus_fn)
 
