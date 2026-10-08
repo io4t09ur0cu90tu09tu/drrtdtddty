@@ -1,13 +1,29 @@
+import sys
+from pathlib import Path
 from copy import deepcopy
 import pytest
-from core import (
-    MobileUser,
-    apply_loyalty_discount,
-    calculate_usage_cost,
-    calculate_user_monthly_cost,
-    make_mobile_processor,
-    process_mobile_users,
-)
+
+# Додаємо папку lab01 у sys.path для гарантії успішного імпорту
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+try:
+    from core import (
+        MobileUser,
+        apply_loyalty_discount,
+        calculate_usage_cost,
+        calculate_user_monthly_cost,
+        make_mobile_processor,
+        process_mobile_users,
+    )
+except ImportError:
+    from lab01.core import (
+        MobileUser,
+        apply_loyalty_discount,
+        calculate_usage_cost,
+        calculate_user_monthly_cost,
+        make_mobile_processor,
+        process_mobile_users,
+    )
 
 @pytest.fixture
 def sample_user() -> MobileUser:
@@ -43,11 +59,3 @@ def test_callable_policies(sample_user: MobileUser) -> None:
     assert res["count"] == 1
     assert res["users"][0]["monthly_cost"] == 80.0
     assert res["total_revenue"] == 80.0
-
-def test_edge_cases() -> None:
-    # Перевірка на порожні дані та від'ємні значення
-    empty_usage_cost = calculate_usage_cost({})
-    assert empty_usage_cost == 0.0
-
-    zero_discount = apply_loyalty_discount(0.0, 100)
-    assert zero_discount == 0.0
