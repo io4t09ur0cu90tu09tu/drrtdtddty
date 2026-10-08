@@ -16,6 +16,7 @@ try:
         calculate_user_monthly_cost,
         process_orders_pure,
         make_processor,
+        make_mobile_processor,
     )
 except ImportError:
     from lab01.core import (
@@ -25,6 +26,7 @@ except ImportError:
         calculate_user_monthly_cost,
         process_orders_pure,
         make_processor,
+        make_mobile_processor,
     )
 
 
@@ -60,9 +62,9 @@ def test_no_mutation(sample_user: MobileUser) -> None:
 def test_callable_policies(sample_user: MobileUser) -> None:
     """Перевірка параметризації політик через Callable."""
     tariff = lambda u: 100.0
-    discount = lambda cost, bonus: cost - float(bonus)
+    discount = lambda cost, bonus=0: cost - float(bonus)
 
-    processor = make_processor(tariff_fn=tariff, bonus_fn=discount)
+    processor = make_mobile_processor(tariff, discount)
     res = processor([sample_user])
 
     assert res["count"] == 1
