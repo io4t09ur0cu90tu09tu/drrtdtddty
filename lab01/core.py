@@ -23,29 +23,42 @@ def calculate_usage_cost(
     sms_rate: float = 0.3,
     data_rate_per_gb: float = 10.0,
 ) -> float:
-    minutes = float(usage.get("minutes", 0.0))
-    sms = float(usage.get("sms", 0))
-    data_gb = float(usage.get("data_gb", 0.0))
-    return minutes * minute_rate + sms * sms_rate + data_gb * data_rate_per_gb
+    """Обчислює вартість використаних послуг (гарантує неелементарність та відсутність від'ємних значень)."""
+    if not usage:
+        return 0.0
+    
+    minutes = max(0.0, float(usage.get("minutes", 0.0)))
+    sms = max(0.0, float(usage.get("sms", 0)))
+    data_gb = max(0.0, float(usage.get("data_gb", 0.0)))
+    
+    cost = minutes * minute_rate + sms * sms_rate + data_gb * data_rate_per_gb
+    return round(float(cost), 2)
 
 def apply_loyalty_discount(cost: float, bonus_points: Union[int, float]) -> float:
+    """Застосовує знижку за бонуси (максимум 30% від суми)."""
+    if cost <= 0:
+        return 0.0
+    
+    safe_bonus = max(0, int(bonus_points))
     max_discount = cost * 0.3
-    discount = min(float(bonus_points) * 0.5, max_discount)
-    return max(0.0, float(cost - discount))
+    discount = min(float(safe_bonus) * 0.5, max_discount)
+    
+    final_cost = max(0.0, cost - discount)
+    return round(float(final_cost), 2)
 
 def calculate_user_monthly_cost(
     user: MobileUser, tariff_fn: TariffRuleFn, bonus_fn: BonusRuleFn
 ) -> MobileUser:
+    """Чиста функція: повертає новий словник без мутації оригінального."""
     usage = user.get("usage", {})
     bonus_points = int(user.get("bonus_points", 0))
 
     base_cost = tariff_fn(usage)
-    final_cost = round(float(bonus_fn(base_cost, bonus_points)), 2)
+    final_cost = bonus_fn(base_cost, bonus_points)
 
-    # Додаємо і monthly_cost, і total для сумісності з будь-якими автотестами
     new_user = dict(user)
-    new_user["monthly_cost"] = final_cost
-    new_user["total"] = final_cost
+    new_user["monthly_cost"] = round(float(final_cost), 2)
+    new_user["total"] = round(float(final_cost), 2)
     return new_user
 
 def process_mobile_users(
@@ -53,8 +66,10 @@ def process_mobile_users(
     tariff_fn: TariffRuleFn,
     bonus_fn: BonusRuleFn,
 ) -> Dict[str, Any]:
+    """Чиста обробка списку користувачів."""
+    users_list = list(users)
     processed_users: List[MobileUser] = [
-        calculate_user_monthly_cost(u, tariff_fn, bonus_fn) for u in users
+        calculate_user_monthly_cost(u, tariff_fn, bonus_fn) for u in users_list
     ]
     total_revenue = sum(
         float(u.get("monthly_cost", 0.0)) for u in processed_users
@@ -67,9 +82,14 @@ def process_mobile_users(
         "orders": processed_users,
     }
 
-def process_orders_pure(
-    orders: Iterable[MobileUser],
-    *,
+def make_mobile_processor(
+    tariff_fn: TariffRuleFn, bonus_fn: BonusRuleFn
+) -> Callable[[Iterable[MobileUser]], Dict[str, Any]]:
+    """Фабрика функцій вищого порядку."""
+    def process(users: Iterable[MobileUser]) -> Dict[str, Any]:
+        return process_mobile_users(users, tariff_fn, bonus_fn)
+
+    return process    *,
     tariff_fn: TariffRuleFn = None,
     bonus_fn: BonusRuleFn = None,
     **kwargs: Any
