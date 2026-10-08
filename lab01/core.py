@@ -23,33 +23,24 @@ def calculate_usage_cost(
     sms_rate: float = 0.3,
     data_rate_per_gb: float = 10.0,
 ) -> float:
-    """Обчислює вартість використаних послуг (гарантує неелементарність та відсутність від'ємних значень)."""
     if not usage:
         return 0.0
-    
     minutes = max(0.0, float(usage.get("minutes", 0.0)))
     sms = max(0.0, float(usage.get("sms", 0)))
     data_gb = max(0.0, float(usage.get("data_gb", 0.0)))
-    
-    cost = minutes * minute_rate + sms * sms_rate + data_gb * data_rate_per_gb
-    return round(float(cost), 2)
+    return round(minutes * minute_rate + sms * sms_rate + data_gb * data_rate_per_gb, 2)
 
 def apply_loyalty_discount(cost: float, bonus_points: Union[int, float]) -> float:
-    """Застосовує знижку за бонуси (максимум 30% від суми)."""
     if cost <= 0:
         return 0.0
-    
     safe_bonus = max(0, int(bonus_points))
     max_discount = cost * 0.3
     discount = min(float(safe_bonus) * 0.5, max_discount)
-    
-    final_cost = max(0.0, cost - discount)
-    return round(float(final_cost), 2)
+    return round(max(0.0, cost - discount), 2)
 
 def calculate_user_monthly_cost(
     user: MobileUser, tariff_fn: TariffRuleFn, bonus_fn: BonusRuleFn
 ) -> MobileUser:
-    """Чиста функція: повертає новий словник без мутації оригінального."""
     usage = user.get("usage", {})
     bonus_points = int(user.get("bonus_points", 0))
 
@@ -66,11 +57,25 @@ def process_mobile_users(
     tariff_fn: TariffRuleFn,
     bonus_fn: BonusRuleFn,
 ) -> Dict[str, Any]:
-    """Чиста обробка списку користувачів."""
-    users_list = list(users)
     processed_users: List[MobileUser] = [
-        calculate_user_monthly_cost(u, tariff_fn, bonus_fn) for u in users_list
+        calculate_user_monthly_cost(u, tariff_fn, bonus_fn) for u in users
     ]
+    total_revenue = sum(float(u.get("monthly_cost", 0.0)) for u in processed_users)
+    return {
+        "count": len(processed_users),
+        "revenue": round(total_revenue, 2),
+        "total_revenue": round(total_revenue, 2),
+        "users": processed_users,
+        "orders": processed_users,
+    }
+
+def make_mobile_processor(
+    tariff_fn: TariffRuleFn, bonus_fn: BonusRuleFn
+) -> Callable[[Iterable[MobileUser]], Dict[str, Any]]:
+    def process(users: Iterable[MobileUser]) -> Dict[str, Any]:
+        return process_mobile_users(users, tariff_fn, bonus_fn)
+
+    return process    ]
     total_revenue = sum(
         float(u.get("monthly_cost", 0.0)) for u in processed_users
     )
