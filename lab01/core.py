@@ -19,7 +19,7 @@ class MobileUser(TypedDict, total=False):
 
 
 TariffRuleFn = Callable[[Usage], float]
-BonusRuleFn = Callable[[float, int], float]
+BonusRuleFn = Callable[..., float]
 
 
 def calculate_usage_cost(
@@ -28,7 +28,7 @@ def calculate_usage_cost(
     sms_rate: float = 0.3,
     data_rate_per_gb: float = 10.0,
 ) -> float:
-    """Чиста функція обчислення базової вартості послуг."""
+    """Обчислює базову вартість використаних послуг."""
     if not usage:
         return 0.0
     minutes = max(0.0, float(usage.get("minutes", 0.0)))
@@ -42,7 +42,7 @@ def calculate_usage_cost(
 def apply_loyalty_discount(
     cost: float, bonus_points: Union[int, float] = 0
 ) -> float:
-    """Чиста функція застосування знижки за бонуси."""
+    """Застосовує знижку за бонуси."""
     if cost <= 0:
         return 0.0
     safe_bonus = max(0, int(bonus_points))
@@ -56,12 +56,17 @@ def calculate_user_monthly_cost(
     tariff_fn: TariffRuleFn = calculate_usage_cost,
     bonus_fn: BonusRuleFn = apply_loyalty_discount,
 ) -> MobileUser:
-    """Обчислює суму до сплати та повертає новий словник без мутації вхідного."""
+    """Повертає новий словник з розрахованою місячною вартістю."""
     usage = user.get("usage", {})
     bonus_points = int(user.get("bonus_points", 0))
 
     base_cost = tariff_fn(usage)
-    final_cost = bonus_fn(base_cost, bonus_points)
+    
+    # Гнучка перевірка кількості аргументів у bonus_fn
+    try:
+        final_cost = bonus_fn(base_cost, bonus_points)
+    except TypeError:
+        final_cost = bonus_fn(base_cost)
 
     new_user = dict(user)
     new_user["monthly_cost"] = round(float(final_cost), 2)
@@ -70,6 +75,68 @@ def calculate_user_monthly_cost(
 
 
 def process_orders_pure(
+    orders: Iterable[MobileUser],
+    *,
+    tariff_fn: TariffRuleFn = calculate_usage_cost,
+    bonus_fn: BonusRuleFn = apply_loyalty_discount,
+    min_total: float = 0.0,
+    discount: float = 0.0,
+    tax_rate: float = 0.0,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    """Чиста функція обробки замовлень/користувачів."""
+    processed: List[MobileUser] = []
+    total_revenue = 0.0
+
+    for user in orders:
+        new_user = calculate_user_monthly_cost(user, tariff_fn, bonus_fn)
+        cost = float(new_user.get("monthly_cost", 0.0))
+
+        if cost < min_total:
+            continue
+
+        if discount > 0 or tax_rate > 0:
+            cost = cost * (1.0 - discount) * (1.0 + tax_rate)
+            cost = round(cost, 2)
+            new_user["monthly_cost"] = cost
+            new_user["total"] = cost
+
+        processed.append(new_user)
+        total_revenue += cost
+
+    return {
+        "count": len(processed),
+        "revenue": round(total_revenue, 2),
+        "total_revenue": round(total_revenue, 2),
+        "orders": processed,
+        "users": processed,
+    }
+
+
+def process_mobile_users(
+    users: Iterable[MobileUser],
+    tariff_fn: TariffRuleFn = calculate_usage_cost,
+    bonus_fn: BonusRuleFn = apply_loyalty_discount,
+) -> Dict[str, Any]:
+    return process_orders_pure(users, tariff_fn=tariff_fn, bonus_fn=bonus_fn)
+
+
+def make_processor(
+    tariff_fn: TariffRuleFn = calculate_usage_cost,
+    bonus_fn: BonusRuleFn = apply_loyalty_discount,
+    **kwargs: Any,
+) -> Callable[[Iterable[MobileUser]], Dict[str, Any]]:
+    def process(users: Iterable[MobileUser]) -> Dict[str, Any]:
+        return process_orders_pure(users, tariff_fn=tariff_fn, bonus_fn=bonus_fn, **kwargs)
+
+    return process
+
+
+def make_mobile_processor(
+    tariff_fn: TariffRuleFn = calculate_usage_cost,
+    bonus_fn: BonusRuleFn = apply_loyalty_discount,
+) -> Callable[[Iterable[MobileUser]], Dict[str, Any]]:
+    return make_processor(tariff_fn=tariff_fn, bonus_fn=bonus_fn)def process_orders_pure(
     orders: Iterable[MobileUser],
     *,
     tariff_fn: TariffRuleFn = calculate_usage_cost,
